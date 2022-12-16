@@ -95,8 +95,11 @@ public:
                 delete_queue.push_back(elem.first);
             }else{
                 glfwMakeContextCurrent(elem.first);
+                glClear(GL_COLOR_BUFFER_BIT);
+                glRasterPos2d(-1, 1);
+                glPixelZoom(1, -1);
                 glDrawPixels(elem.second.width, elem.second.height, GL_RGBA,  GL_UNSIGNED_BYTE, elem.second.current_pixelmap.data());
-
+                glFlush();
                 glfwSwapBuffers(elem.first);
                 glfwPollEvents();
             }
@@ -126,7 +129,7 @@ void glfw_windows_init(){
 GLFWwindow* create_window(int width, int height, const std::string& title){
     GLFWwindow* window = glfwCreateWindow(width, height, title.c_str(), NULL, NULL);
     assert(window);
-    _window_map.add_window(window, height, width);
+    _window_map.add_window(window, width, height);
     return window;
 }
 
@@ -139,7 +142,8 @@ void destroy_window(GLFWwindow* wnd){
 }
 
 void glfw_windows_do_event_loop(){
-    while(_window_map.render_all_windows()){}
+    while(_window_map.render_all_windows()){
+    }
 }
 
 
