@@ -19,8 +19,12 @@ class GLFW_Window_map{
     std::map<GLFWwindow*, GLFW_Window> _data;
     std::mutex _ownership;
 
-    //todo prealloc
-    std::map<GLFWwindow*, std::vector<char>> _mail_box;
+    struct MailBox{
+        bool is_data_present;
+        std::vector<char> data;
+    };
+
+    std::map<GLFWwindow*, MailBox> _mail_box;
     std::mutex _mailbox_ownership;
 
     void _update_content(GLFWwindow* wnd, void *data, unsigned int size){
@@ -33,12 +37,16 @@ class GLFW_Window_map{
 public:
     void add_window(GLFWwindow* wnd, int width, int height){
         std::lock_guard<std::mutex> lg(_ownership);
+        std::lock_guard<std::mutex> lg2(_mailbox_ownership);
         GLFW_Window content;
         const auto size = width * height * 4;
         content.current_pixelmap.resize(size);
+        auto mail_box = content.current_pixelmap;
+
         content.height = height;
         content.width = width;
         _data.insert({wnd, std::move(content)});
+        _mail_box.insert({wnd,{false, std::move(mail_box)}});
     }
 
     void update_content(GLFWwindow* wnd, void *data, unsigned int size){
@@ -48,20 +56,18 @@ public:
         }else{
             std::lock_guard<std::mutex> lg(_mailbox_ownership);
             auto it = _mail_box.find(wnd);
-            if(it == _mail_box.end()){
-                auto res = _mail_box.insert({wnd, std::vector<char>{}});
-                it = res.first;
-            }
-
-            it->second.resize(size);
-            memcpy(it->second.data(), data, size);
+            assert(it->second.data.size() == size);
+            memcpy(it->second.data.data(), data, size);
+            it->second.is_data_present = true;
         }
     }
 
     void remove_window(GLFWwindow* wnd){
         std::lock_guard<std::mutex> lg(_ownership);
+        std::lock_guard<std::mutex> lg2(_mailbox_ownership);
         glfwDestroyWindow(wnd);
         _data.erase(wnd);
+        _mail_box.erase(wnd);
     }
 
     bool render_all_windows(){
@@ -71,15 +77,16 @@ public:
         if(_mailbox_ownership.try_lock()){
             
             for(auto& elem: _mail_box){
-                
-                auto it = _data.find(elem.first);
-                if(it != _data.end()){
-                    it->second.current_pixelmap = std::move(elem.second);
+                if(elem.second.is_data_present){
+                    auto it = _data.find(elem.first);
+                    if(it != _data.end()){
+                        assert(it->second.current_pixelmap.size() == elem.second.data.size());
+                        memcpy(it->second.current_pixelmap.data(), elem.second.data.data(), elem.second.data.size() * sizeof( elem.second.data[0]));
+                    }
+                    elem.second.is_data_present = false;
                 }
 
             }
-
-            _mail_box.clear();
 
             _mailbox_ownership.unlock();
         }
@@ -141,8 +148,11 @@ void destroy_window(GLFWwindow* wnd){
     _window_map.remove_window(wnd);
 }
 
-void glfw_windows_do_event_loop(){
+void glfw_windows_do_event_loop(std::atomic<bool>& exit_signal){
     while(_window_map.render_all_windows()){
+        if(exit_signal.load()){
+            break;
+        }
     }
 }
 
