@@ -5,6 +5,8 @@
 #include <GLFW/glfw3.h>
 
 #include <string>
+#include <atomic>
+
 
 void glfw_windows_init();
 
@@ -12,7 +14,7 @@ void glfw_windows_init();
 GLFWwindow* create_window(int width, int height, const std::string& title);
 void apply_pixelmap(GLFWwindow* wnd, void* data, unsigned int size);
 void destroy_window(GLFWwindow* wnd);
-void glfw_windows_do_event_loop();
+void glfw_windows_do_event_loop(std::atomic<bool>& exit_signal);
 
 
 #endif
